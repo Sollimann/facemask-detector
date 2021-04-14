@@ -4,6 +4,9 @@ version = "0.1.0"
 description = ""
 authors = ["sollimann <kristoffer.solberg@cognite.com>"]
 
+[tool.poetry.scripts]
+train = "train_mask_detector:main"
+
 [tool.poetry.dependencies]
 python = "^3.6"
 tensorflow = "^1.15.2"
@@ -15,6 +18,7 @@ argparse = "1.1"
 scipy = "1.4.1"
 sklearn = "^0.0"
 imutils = "^0.5.4"
+Pillow = "^8.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
