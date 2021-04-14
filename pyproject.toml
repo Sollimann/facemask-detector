@@ -6,6 +6,7 @@ authors = ["sollimann <kristoffer.solberg@cognite.com>"]
 
 [tool.poetry.scripts]
 train = "train_mask_detector:main"
+facecamera = "facemask_detector.detect_mask_video:main"
 
 [tool.poetry.dependencies]
 python = "^3.6"
