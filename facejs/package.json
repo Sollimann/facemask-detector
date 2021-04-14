@@ -1,0 +1,10 @@
+{
+  "name": "facejs",
+  "version": "1.0.0",
+  "description": "run facemask detection in nodejs",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "opencv": "^7.0.0"
+  }
+}
