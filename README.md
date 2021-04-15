@@ -1,4 +1,4 @@
-# facemask-detector
+# facemask-detector + pose estimation
 
 ### To train
 ```bash
