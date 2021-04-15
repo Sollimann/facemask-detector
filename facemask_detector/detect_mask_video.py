@@ -40,6 +40,7 @@ def detect_and_predict_mask(image, faceNet, maskNet, threshold=0.5):
         # filter out weak detections by ensuring the confidence is greater than the minimum confidence
         if confidence > threshold:
             # compute the (x, y) pixel coordinates of the bounding box for the object
+            print(f"detections: {detections[0, 0, face, 3:7]}")
             box = detections[0, 0, face, 3:7] * np.array([w, h, w, h])
 
             (startX, startY, endX, endY) = box.astype("int")
@@ -136,6 +137,59 @@ def pose_detection(image, poseNet, threshold=0.2):
     t, _ = poseNet.getPerfProfile()
     freq = cv2.getTickFrequency() / 1000
     cv2.putText(image, '%.2fms' % (t / freq), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+
+    lk = points[LEG_PARTS["LKnee"]]
+    la = points[LEG_PARTS["LAnkle"]]
+    rk = points[LEG_PARTS["RKnee"]]
+    ra = points[LEG_PARTS["RAnkle"]]
+
+    if lk and la and rk and ra:
+        print(f"lk {lk}, la {la}, rk {rk}, ra {ra}")
+        image = bounding_box_around_feet(image, lk, la, rk, ra)
+    return image
+
+
+def bounding_box_around_feet(image, left_knee, left_ankle, right_knee, right_ankle):
+    def extrapolate(p1, p2, scale=1.0):
+        (x1, y1) = p1
+        (x2, y2) = p2
+        x3 = x1 + (x2 - x1) * scale
+        y3 = y1 + (y2 - y1) * scale
+        return x3, y3
+
+    def leg_length(p1, p2):
+        (x1, y1) = p1
+        (x2, y2) = p2
+        dist = ((((x2 - x1) ** 2) + ((y2 - y1) ** 2)) ** 0.5)
+        return dist
+
+    def get_box_coord(point, w, h):
+        x, y = point[0], point[1]
+
+        start_x = (x - round(w / 2))
+        end_x = (x + round(w / 2))
+        start_y = (y - round(h / 2))
+        end_y = (y + round(h / 2))
+        return (round(start_x), round(start_y)), (round(end_x), round(end_y))
+
+    left_foot = extrapolate(left_knee, left_ankle, 1.5)
+    right_foot = extrapolate(right_knee, right_ankle, 1.5)
+
+    left_box_size = leg_length(left_knee, left_ankle) * 0.6
+    right_box_size = leg_length(right_knee, right_ankle) * 0.6
+
+    l_start, l_end = get_box_coord(left_foot, left_box_size, left_box_size)
+    r_start, r_end = get_box_coord(right_foot, right_box_size, right_box_size)
+
+    color = (0, 0, 255)
+
+    cv2.putText(image, "left foot", (l_start[0], l_start[1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+    cv2.rectangle(image, l_start, l_end, color, 2)
+
+    cv2.putText(image, "right foot", (r_start[0], r_start[1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+    cv2.rectangle(image, r_start, r_end, color, 2)
     return image
 
 
@@ -177,6 +231,7 @@ def main():
 
         # loop over the detected face locations and their corresponding
         # locations
+
         for (box, pred) in zip(locs, preds):
             # unpack the bounding box and predictions
             (startX, startY, endX, endY) = box
