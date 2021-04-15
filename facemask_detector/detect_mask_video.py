@@ -84,6 +84,9 @@ def pose_detection(image, poseNet, threshold=0.2):
                   ["LHip", "LKnee"], ["LKnee", "LAnkle"], ["Neck", "Nose"], ["Nose", "REye"],
                   ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"]]
 
+    LEG_PARTS = {"RKnee": 9, "RAnkle": 10, "LKnee": 12, "LAnkle": 13}
+    LEG_POSE_PAIRS = [["RKnee", "RAnkle"], ["LKnee", "LAnkle"]]
+
     (h, w) = image.shape[:2]
     blob = cv2.dnn.blobFromImage(
         image=image,
@@ -116,14 +119,14 @@ def pose_detection(image, poseNet, threshold=0.2):
         # Add a point if it's confidence is higher than threshold.
         points.append((int(x), int(y)) if conf > threshold else None)
 
-    for pair in POSE_PAIRS:
+    for pair in LEG_POSE_PAIRS:
         partFrom = pair[0]
         partTo = pair[1]
         assert (partFrom in BODY_PARTS)
         assert (partTo in BODY_PARTS)
 
-        idFrom = BODY_PARTS[partFrom]
-        idTo = BODY_PARTS[partTo]
+        idFrom = LEG_PARTS[partFrom]
+        idTo = LEG_PARTS[partTo]
 
         if points[idFrom] and points[idTo]:
             cv2.line(image, points[idFrom], points[idTo], (0, 255, 0), 3)
