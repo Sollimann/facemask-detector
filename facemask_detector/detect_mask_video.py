@@ -72,6 +72,73 @@ def detect_and_predict_mask(image, faceNet, maskNet, threshold=0.5):
     return locs, preds
 
 
+def pose_detection(image, poseNet, threshold=0.2):
+    BODY_PARTS = {"Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
+                  "LShoulder": 5, "LElbow": 6, "LWrist": 7, "RHip": 8, "RKnee": 9,
+                  "RAnkle": 10, "LHip": 11, "LKnee": 12, "LAnkle": 13, "REye": 14,
+                  "LEye": 15, "REar": 16, "LEar": 17, "Background": 18}
+
+    POSE_PAIRS = [["Neck", "RShoulder"], ["Neck", "LShoulder"], ["RShoulder", "RElbow"],
+                  ["RElbow", "RWrist"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
+                  ["Neck", "RHip"], ["RHip", "RKnee"], ["RKnee", "RAnkle"], ["Neck", "LHip"],
+                  ["LHip", "LKnee"], ["LKnee", "LAnkle"], ["Neck", "Nose"], ["Nose", "REye"],
+                  ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"]]
+
+    LEG_PARTS = {"RKnee": 9, "RAnkle": 10, "LKnee": 12, "LAnkle": 13}
+    LEG_POSE_PAIRS = [["RKnee", "RAnkle"], ["LKnee", "LAnkle"]]
+
+    (h, w) = image.shape[:2]
+    blob = cv2.dnn.blobFromImage(
+        image=image,
+        scalefactor=1.0,
+        size=(224, 224),
+        mean=(104.0, 177.0, 123.0),
+        swapRB=True,
+        crop=False
+    )
+
+    # pass the blob through the network and obtain the face detections
+    poseNet.setInput(blob)
+    detections = poseNet.forward()
+    detections = detections[:, :19, :, :]  # MobileNet output [1, 57, -1, -1], we only need the first 19 elements
+    logger.info(detections.shape)
+
+    assert (len(BODY_PARTS) == detections.shape[1])
+
+    points = []
+    for i in range(len(BODY_PARTS)):
+        # Slice heatmap of corresponding body's part.
+        heatMap = detections[0, i, :, :]
+
+        # Originally, we try to find all the local maximums. To simplify a sample
+        # we just find a global one. However only a single pose at the same time
+        # could be detected this way.
+        _, conf, _, point = cv2.minMaxLoc(heatMap)
+        x = (w * point[0]) / detections.shape[3]
+        y = (h * point[1]) / detections.shape[2]
+        # Add a point if it's confidence is higher than threshold.
+        points.append((int(x), int(y)) if conf > threshold else None)
+
+    for pair in LEG_POSE_PAIRS:
+        partFrom = pair[0]
+        partTo = pair[1]
+        assert (partFrom in BODY_PARTS)
+        assert (partTo in BODY_PARTS)
+
+        idFrom = LEG_PARTS[partFrom]
+        idTo = LEG_PARTS[partTo]
+
+        if points[idFrom] and points[idTo]:
+            cv2.line(image, points[idFrom], points[idTo], (0, 255, 0), 3)
+            cv2.ellipse(image, points[idFrom], (3, 3), 0, 0, 360, (0, 0, 255), cv2.FILLED)
+            cv2.ellipse(image, points[idTo], (3, 3), 0, 0, 360, (0, 0, 255), cv2.FILLED)
+
+    t, _ = poseNet.getPerfProfile()
+    freq = cv2.getTickFrequency() / 1000
+    cv2.putText(image, '%.2fms' % (t / freq), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+    return image
+
+
 def load_models():
     def rchop(s, suffix):
         if suffix and s.endswith(suffix):
@@ -84,13 +151,13 @@ def load_models():
     weightsPath = rf"{DIR}/trained_models/res10_300x300_ssd_iter_140000.caffemodel"
     faceNet = cv2.dnn.readNet(prototxtPath, weightsPath)
     maskNet = load_model(rf"{DIR}/trained_models/mask_detector.model")
-    return faceNet, maskNet
+    poseNet = cv2.dnn.readNetFromTensorflow(rf"{DIR}/trained_models/pose_detection.pb")
+    return faceNet, maskNet, poseNet
 
 
 def main():
-
     # load models
-    faceNet, maskNet = load_models()
+    faceNet, maskNet, poseNet = load_models()
 
     # initialize the videostream
     vs = cv2.VideoCapture(0)
@@ -101,8 +168,8 @@ def main():
 
         # grab the frame from the threaded video stream and resize it to have a
         # max width of 400 pixels
-        #dsize = (frame.shape[1], 400)
-        #image = cv2.resize(frame, dsize)
+        # dsize = (frame.shape[1], 400)
+        # image = cv2.resize(frame, dsize)
 
         # detect faces in the frame and determine if they are wearing a
         # face mask or not
@@ -128,6 +195,9 @@ def main():
             cv2.putText(image, label, (startX, startY - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
             cv2.rectangle(image, (startX, startY), (endX, endY), color, 2)
+
+        # pose detection
+        image = pose_detection(image, poseNet)
 
         # show the output frame
         cv2.imshow("Frame", image)
